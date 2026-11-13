@@ -19,7 +19,6 @@ usuarios de demonstracao vem de variaveis de ambiente (TASKFLOW_SECRET_KEY,
 TASKFLOW_ADMIN_PASSWORD e TASKFLOW_USER_PASSWORD).
 """
 
-import json
 import os
 import sqlite3
 
