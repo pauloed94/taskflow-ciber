@@ -1,0 +1,17 @@
+* text=auto
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.tf text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.tsv text eol=lf
+*.pdf binary
+*.png binary
+*.jpg binary
+*.mp4 binary
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+requirements.txt text eol=lf

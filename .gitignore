@@ -1,0 +1,60 @@
+# Ambientes e dependências Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+build/
+dist/
+
+# Segredos locais (somente exemplos podem ser versionados)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Estado e variáveis locais do Terraform; manter .terraform.lock.hcl versionado
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Dados e saídas geradas; evidências revisadas entram em docs/evidencias/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+/data/
+/logs/
+/reports/
+/tmp/
+
+# Sistema e editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Repositorio de estudo publico: nao versionar material da disciplina nem dados do grupo
+/docs/referencias/aulas/
+/docs/referencias/enunciado/
+/docs/referencias/manifesto.json
+/docs/fase-b-grupo/
+*.pdf
