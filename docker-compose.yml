@@ -1,0 +1,82 @@
+# TaskFlow com banco de dados, orquestrados de forma segura.
+# Antes de subir: cp .env.example .env  (e preencha o .env com valores proprios).
+
+name: taskflow
+
+services:
+  web:
+    build: .
+    image: taskflow:compose
+    ports:
+      # Unica porta publicada no host, e so para o proprio computador (127.0.0.1).
+      - "127.0.0.1:5000:5000"
+    environment:
+      # Sem segredo no arquivo: os valores vem do .env (que nao e versionado).
+      TASKFLOW_SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY no arquivo .env}
+      TASKFLOW_ADMIN_PASSWORD: ${TASKFLOW_ADMIN_PASSWORD:?defina TASKFLOW_ADMIN_PASSWORD no arquivo .env}
+      TASKFLOW_USER_PASSWORD: ${TASKFLOW_USER_PASSWORD:?defina TASKFLOW_USER_PASSWORD no arquivo .env}
+      # Com o filesystem somente leitura, o SQLite grava no tmpfs (/tmp).
+      TASKFLOW_DB: /tmp/taskflow.db
+    networks:
+      - frontend
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/login')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER no arquivo .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB no arquivo .env}
+    # Sem "ports:": o banco nao e publicado no host. So quem esta na rede backend o alcanca.
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - taskflow_db_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+    healthcheck:
+      # O $$ evita que o Compose troque a variavel; quem a le e o shell do container.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  # Onde ficaria o que e alcancado de fora (hoje, so o web).
+  frontend:
+  # Rede interna: o banco e o web conversam aqui, e nada de fora entra.
+  backend:
+    internal: true
+
+volumes:
+  taskflow_db_data:
