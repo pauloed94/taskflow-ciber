@@ -1,18 +1,17 @@
 """
 TaskFlow - Aplicacao de exemplo da disciplina DevSecOps.
 
-ATENCAO: Esta aplicacao contem vulnerabilidades INTRODUZIDAS DE PROPOSITO
-para fins didaticos. NUNCA use este codigo como referencia de boas praticas
+ATENCAO: A linha de base desta aplicacao contem vulnerabilidades INTRODUZIDAS
+DE PROPOSITO para fins didaticos. NUNCA use este codigo como referencia de boas praticas
 e NUNCA implante em ambiente de producao ou exposto a internet.
 
-Vulnerabilidades presentes nesta versao (linha de base):
-  1. SQL Injection no login e na busca de tarefas (Modulo 3 - SAST)
-  2. Cross-Site Scripting (XSS) armazenado na descricao da tarefa (Modulo 3/4)
-  3. Senhas armazenadas em texto puro no banco (Modulo 2/3)
-  4. Endpoint de debug exposto publicamente, que devolve a chave de sessao
-     (Modulo 2/4)
-  5. Servidor de desenvolvimento com debug ligado e escutando em 0.0.0.0
-  6. Dependencias com CVEs conhecidas em requirements.txt (Modulo 3 - SCA)
+Situacao das vulnerabilidades da linha de base nesta versao:
+  1. SQL Injection no login e na busca de tarefas ............ CORRIGIDA
+  2. Cross-Site Scripting (XSS) armazenado na descricao ...... PRESENTE
+  3. Senhas armazenadas em texto puro no banco ............... PRESENTE
+  4. Endpoint /debug/info exposto (devolve a chave de sessao)  PRESENTE
+  5. Debug ligado e servidor escutando em 0.0.0.0 ............ PRESENTE
+  6. Dependencias com CVEs em requirements.txt ............... (tratadas no requirements.txt)
 
 Nenhuma credencial fica no repositorio: a chave de sessao e as senhas dos
 usuarios de demonstracao vem de variaveis de ambiente (TASKFLOW_SECRET_KEY,
@@ -104,18 +103,15 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
 
-        # Vulnerabilidade #1: SQL Injection.
-        # A query e montada por concatenacao de string em vez de usar
-        # parametros preparados (placeholders "?").
-        query = (
-            "SELECT * FROM users WHERE username = '"
-            + username
-            + "' AND password = '"
-            + password
-            + "'"
-        )
+        # CORRECAO #1 (SQL Injection): a query era montada por concatenacao, e uma
+        # entrada como  admin' --  virava parte do comando SQL (login sem senha).
+        # Agora o SQL e os valores vao separados (placeholders "?"): o banco trata
+        # o que o usuario digita sempre como DADO, nunca como comando.
         db = get_db()
-        cur = db.execute(query)
+        cur = db.execute(
+            "SELECT * FROM users WHERE username = ? AND password = ?",
+            (username, password),
+        )
         user = cur.fetchone()
 
         if user:
@@ -150,15 +146,13 @@ def tasks():
     db = get_db()
 
     if search:
-        # Vulnerabilidade #1 (variante): SQL Injection tambem na busca.
-        query = (
-            "SELECT * FROM tasks WHERE user_id = "
-            + str(session["user_id"])
-            + " AND title LIKE '%"
-            + search
-            + "%'"
-        )
-        rows = db.execute(query).fetchall()
+        # Idem na busca: antes o termo era concatenado no LIKE. Agora o padrao
+        # "%termo%" e montado em Python e enviado como UM unico parametro "?".
+        like_pattern = f"%{search}%"
+        rows = db.execute(
+            "SELECT * FROM tasks WHERE user_id = ? AND title LIKE ?",
+            (session["user_id"], like_pattern),
+        ).fetchall()
     else:
         rows = db.execute(
             "SELECT * FROM tasks WHERE user_id = ?", (session["user_id"],)
