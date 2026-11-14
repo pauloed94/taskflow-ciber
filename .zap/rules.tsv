@@ -1,0 +1,10 @@
+# Regras do ZAP Baseline: id<TAB>ACAO<TAB>justificativa
+10020	FAIL	Anti-clickjacking ausente (Medium)
+10038	FAIL	CSP ausente (Medium)
+10021	FAIL	X-Content-Type-Options ausente (Low)
+10036	FAIL	Server expoe a versao (Low)
+10063	FAIL	Permissions-Policy ausente (Low)
+90004	FAIL	COOP/COEP/CORP ausentes (Low)
+10049	IGNORE	Cache (informativo): sem risco
+10111	IGNORE	Autenticacao identificada (informativo): sem risco
+10202	IGNORE	Sem token CSRF nos formularios POST: risco aceito no laboratorio (fora do escopo do enunciado); em producao usar Flask-WTF/CSRFProtect
