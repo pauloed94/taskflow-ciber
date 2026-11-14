@@ -98,6 +98,24 @@ with app.app_context():
     init_db()
 
 
+# Cabecalhos de seguranca em toda resposta (os que o ZAP cobrava): o navegador
+# nao "adivinha" o tipo do arquivo (nosniff), a pagina nao pode ser embutida em
+# outro site (X-Frame-Options e CSP frame-ancestors) e scripts de fora nao rodam (CSP).
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; frame-ancestors 'none'; form-action 'self'"
+    )
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.route("/")
 def index():
     if "user_id" not in session:
