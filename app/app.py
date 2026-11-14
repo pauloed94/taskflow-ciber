@@ -8,7 +8,7 @@ e NUNCA implante em ambiente de producao ou exposto a internet.
 Situacao das vulnerabilidades da linha de base nesta versao:
   1. SQL Injection no login e na busca de tarefas ............ CORRIGIDA
   2. Cross-Site Scripting (XSS) armazenado na descricao ...... PRESENTE
-  3. Senhas armazenadas em texto puro no banco ............... PRESENTE
+  3. Senhas armazenadas em texto puro no banco ............... CORRIGIDA
   4. Endpoint /debug/info exposto (devolve a chave de sessao)  PRESENTE
   5. Debug ligado e servidor escutando em 0.0.0.0 ............ PRESENTE
   6. Dependencias com CVEs em requirements.txt ............... (tratadas no requirements.txt)
@@ -22,6 +22,7 @@ import os
 import sqlite3
 
 from flask import Flask, g, redirect, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 def exige_variavel(nome):
@@ -76,15 +77,16 @@ def init_db():
 
     cur = db.execute("SELECT COUNT(*) AS total FROM users")
     if cur.fetchone()["total"] == 0:
-        # Vulnerabilidade #3: senha em texto puro, sem hashing.
-        # As senhas vem do ambiente; nenhuma fica escrita no codigo.
+        # CORRECAO #3 (senha em texto puro): antes o banco guardava a propria senha,
+        # e quem lesse o taskflow.db teria todas. Agora so o HASH (com salt) e
+        # gravado. As senhas dos usuarios de demonstracao vem do ambiente.
         db.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("admin", exige_variavel("TASKFLOW_ADMIN_PASSWORD")),
+            ("admin", generate_password_hash(exige_variavel("TASKFLOW_ADMIN_PASSWORD"))),
         )
         db.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("aluno", exige_variavel("TASKFLOW_USER_PASSWORD")),
+            ("aluno", generate_password_hash(exige_variavel("TASKFLOW_USER_PASSWORD"))),
         )
         db.commit()
 
@@ -108,13 +110,12 @@ def login():
         # Agora o SQL e os valores vao separados (placeholders "?"): o banco trata
         # o que o usuario digita sempre como DADO, nunca como comando.
         db = get_db()
-        cur = db.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
-            (username, password),
-        )
+        cur = db.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cur.fetchone()
 
-        if user:
+        # Com hash nao se compara texto: check_password_hash recalcula o hash da
+        # senha digitada (mesmo salt) e compara com o que esta no banco.
+        if user and check_password_hash(user["password"], password):
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             return redirect(url_for("tasks"))
