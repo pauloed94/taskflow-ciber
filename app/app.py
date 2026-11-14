@@ -35,7 +35,9 @@ def exige_variavel(nome):
 app = Flask(__name__)
 app.config["SECRET_KEY"] = exige_variavel("TASKFLOW_SECRET_KEY")
 
-DATABASE = "taskflow.db"
+# Caminho do banco configuravel: no Compose o disco do container e somente leitura
+# e o banco vai para /tmp, a unica pasta gravavel. Sem a variavel, nada muda.
+DATABASE = os.environ.get("TASKFLOW_DB", "taskflow.db")
 
 
 def get_db():

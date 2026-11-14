@@ -27,4 +27,4 @@ EXPOSE 5000
 
 # Falha 5: gunicorn (servidor de produção) em vez de "python app.py"
 # Falha 6: com o gunicorn o debug=True do app.py não é executado
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--no-control-socket", "app:app"]
