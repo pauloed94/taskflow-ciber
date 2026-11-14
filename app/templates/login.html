@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>TaskFlow - Login</title>
+</head>
+<body>
+  <h1>TaskFlow - Login</h1>
+  <form method="post">
+    Usuario: <input type="text" name="username"><br>
+    Senha: <input type="password" name="password"><br>
+    <input type="submit" value="Entrar">
+  </form>
+  {% if error %}<p><strong>{{ error }}</strong></p>{% endif %}
+</body>
+</html>
