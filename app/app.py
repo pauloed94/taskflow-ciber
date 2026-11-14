@@ -9,8 +9,8 @@ Situacao das vulnerabilidades da linha de base nesta versao:
   1. SQL Injection no login e na busca de tarefas ............ CORRIGIDA
   2. Cross-Site Scripting (XSS) armazenado na descricao ...... CORRIGIDA
   3. Senhas armazenadas em texto puro no banco ............... CORRIGIDA
-  4. Endpoint /debug/info exposto (devolve a chave de sessao)  PRESENTE
-  5. Debug ligado e servidor escutando em 0.0.0.0 ............ PRESENTE
+  4. Endpoint /debug/info exposto (devolve a chave de sessao)  CORRIGIDA
+  5. Debug ligado e servidor escutando em 0.0.0.0 ............ CORRIGIDA
   6. Dependencias com CVEs em requirements.txt ............... (tratadas no requirements.txt)
 
 Nenhuma credencial fica no repositorio: a chave de sessao e as senhas dos
@@ -179,23 +179,11 @@ def new_task():
     return render_template("new_task.html")
 
 
-# Vulnerabilidade #4: endpoint de debug/diagnostico exposto sem
-# autenticacao, vazando informacoes internas do servidor.
-@app.route("/debug/info")
-def debug_info():
-    import platform
-    import sys
-
-    return {
-        "python_version": sys.version,
-        "platform": platform.platform(),
-        "secret_key": app.config["SECRET_KEY"],
-    }
-
-
 if __name__ == "__main__":
     with app.app_context():
         init_db()
-    # Vulnerabilidade #5: debug=True em producao expoe o Werkzeug debugger
-    # interativo (execucao remota de codigo) - tambem sera sinalizado pelo SAST.
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # CORRECAO #4 e #5: o endpoint /debug/info (que devolvia a chave de sessao)
+    # foi removido, e o debug deixou de ficar ligado: o debugger do Werkzeug
+    # permite executar codigo no servidor. Escuta so em 127.0.0.1, e o debug
+    # so liga com TASKFLOW_DEBUG=1.
+    app.run(host="127.0.0.1", port=5000, debug=os.environ.get("TASKFLOW_DEBUG") == "1")
