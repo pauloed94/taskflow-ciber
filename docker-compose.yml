@@ -17,6 +17,8 @@ services:
       TASKFLOW_USER_PASSWORD: ${TASKFLOW_USER_PASSWORD:?defina TASKFLOW_USER_PASSWORD no arquivo .env}
       # Com o filesystem somente leitura, o SQLite grava no tmpfs (/tmp).
       TASKFLOW_DB: /tmp/taskflow.db
+      # Os logs em arquivo tambem vao para o tmpfs.
+      TASKFLOW_LOG_DIR: /tmp/logs
     networks:
       - frontend
       - backend
