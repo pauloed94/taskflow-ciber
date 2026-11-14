@@ -1,18 +1,17 @@
 """
 TaskFlow - Aplicacao de exemplo da disciplina DevSecOps.
 
-ATENCAO: Esta aplicacao contem vulnerabilidades INTRODUZIDAS DE PROPOSITO
-para fins didaticos. NUNCA use este codigo como referencia de boas praticas
+ATENCAO: A linha de base desta aplicacao contem vulnerabilidades INTRODUZIDAS
+DE PROPOSITO para fins didaticos. NUNCA use este codigo como referencia de boas praticas
 e NUNCA implante em ambiente de producao ou exposto a internet.
 
-Vulnerabilidades presentes nesta versao (linha de base):
-  1. SQL Injection no login e na busca de tarefas (Modulo 3 - SAST)
-  2. Cross-Site Scripting (XSS) armazenado na descricao da tarefa (Modulo 3/4)
-  3. Senhas armazenadas em texto puro no banco (Modulo 2/3)
-  4. Endpoint de debug exposto publicamente, que devolve a chave de sessao
-     (Modulo 2/4)
-  5. Servidor de desenvolvimento com debug ligado e escutando em 0.0.0.0
-  6. Dependencias com CVEs conhecidas em requirements.txt (Modulo 3 - SCA)
+Situacao das vulnerabilidades da linha de base nesta versao:
+  1. SQL Injection no login e na busca de tarefas ............ CORRIGIDA
+  2. Cross-Site Scripting (XSS) armazenado na descricao ...... CORRIGIDA
+  3. Senhas armazenadas em texto puro no banco ............... CORRIGIDA
+  4. Endpoint /debug/info exposto (devolve a chave de sessao)  CORRIGIDA
+  5. Debug ligado e servidor escutando em 0.0.0.0 ............ CORRIGIDA
+  6. Dependencias com CVEs em requirements.txt ............... (tratadas no requirements.txt)
 
 Nenhuma credencial fica no repositorio: a chave de sessao e as senhas dos
 usuarios de demonstracao vem de variaveis de ambiente (TASKFLOW_SECRET_KEY,
@@ -22,7 +21,8 @@ TASKFLOW_ADMIN_PASSWORD e TASKFLOW_USER_PASSWORD).
 import os
 import sqlite3
 
-from flask import Flask, g, redirect, request, session, url_for
+from flask import Flask, g, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 def exige_variavel(nome):
@@ -77,15 +77,16 @@ def init_db():
 
     cur = db.execute("SELECT COUNT(*) AS total FROM users")
     if cur.fetchone()["total"] == 0:
-        # Vulnerabilidade #3: senha em texto puro, sem hashing.
-        # As senhas vem do ambiente; nenhuma fica escrita no codigo.
+        # CORRECAO #3 (senha em texto puro): antes o banco guardava a propria senha,
+        # e quem lesse o taskflow.db teria todas. Agora so o HASH (com salt) e
+        # gravado. As senhas dos usuarios de demonstracao vem do ambiente.
         db.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("admin", exige_variavel("TASKFLOW_ADMIN_PASSWORD")),
+            ("admin", generate_password_hash(exige_variavel("TASKFLOW_ADMIN_PASSWORD"))),
         )
         db.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("aluno", exige_variavel("TASKFLOW_USER_PASSWORD")),
+            ("aluno", generate_password_hash(exige_variavel("TASKFLOW_USER_PASSWORD"))),
         )
         db.commit()
 
@@ -104,35 +105,23 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
 
-        # Vulnerabilidade #1: SQL Injection.
-        # A query e montada por concatenacao de string em vez de usar
-        # parametros preparados (placeholders "?").
-        query = (
-            "SELECT * FROM users WHERE username = '"
-            + username
-            + "' AND password = '"
-            + password
-            + "'"
-        )
+        # CORRECAO #1 (SQL Injection): a query era montada por concatenacao, e uma
+        # entrada como  admin' --  virava parte do comando SQL (login sem senha).
+        # Agora o SQL e os valores vao separados (placeholders "?"): o banco trata
+        # o que o usuario digita sempre como DADO, nunca como comando.
         db = get_db()
-        cur = db.execute(query)
+        cur = db.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cur.fetchone()
 
-        if user:
+        # Com hash nao se compara texto: check_password_hash recalcula o hash da
+        # senha digitada (mesmo salt) e compara com o que esta no banco.
+        if user and check_password_hash(user["password"], password):
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             return redirect(url_for("tasks"))
         error = "Usuario ou senha invalidos."
 
-    return f"""
-    <h1>TaskFlow - Login</h1>
-    <form method="post">
-        Usuario: <input type="text" name="username"><br>
-        Senha: <input type="password" name="password"><br>
-        <input type="submit" value="Entrar">
-    </form>
-    <p style="color:red">{error or ""}</p>
-    """
+    return render_template("login.html", error=error)
 
 
 @app.route("/logout")
@@ -150,42 +139,25 @@ def tasks():
     db = get_db()
 
     if search:
-        # Vulnerabilidade #1 (variante): SQL Injection tambem na busca.
-        query = (
-            "SELECT * FROM tasks WHERE user_id = "
-            + str(session["user_id"])
-            + " AND title LIKE '%"
-            + search
-            + "%'"
-        )
-        rows = db.execute(query).fetchall()
+        # Idem na busca: antes o termo era concatenado no LIKE. Agora o padrao
+        # "%termo%" e montado em Python e enviado como UM unico parametro "?".
+        like_pattern = f"%{search}%"
+        rows = db.execute(
+            "SELECT * FROM tasks WHERE user_id = ? AND title LIKE ?",
+            (session["user_id"], like_pattern),
+        ).fetchall()
     else:
         rows = db.execute(
             "SELECT * FROM tasks WHERE user_id = ?", (session["user_id"],)
         ).fetchall()
 
-    items = ""
-    for row in rows:
-        # Vulnerabilidade #2: XSS armazenado. A descricao do usuario e
-        # inserida direto no HTML, sem escaping (Jinja2 com | safe
-        # ou f-string manual como aqui tem o mesmo efeito).
-        items += f"""
-        <li>
-            <b>{row['title']}</b> - {row['description']}
-            {'(feita)' if row['done'] else ''}
-        </li>
-        """
-
-    return f"""
-    <h1>Minhas tarefas ({session['username']})</h1>
-    <form method="get">
-        <input type="text" name="q" placeholder="buscar tarefa">
-        <input type="submit" value="Buscar">
-    </form>
-    <ul>{items}</ul>
-    <a href="{url_for('new_task')}">Nova tarefa</a> |
-    <a href="{url_for('logout')}">Sair</a>
-    """
+    # CORRECAO #2 (XSS armazenado): antes a descricao da tarefa ia direto para o
+    # HTML (f-string), e um <script> digitado nela rodava no navegador de quem
+    # abrisse a lista. Agora os dados vao para o template, e o Jinja2 escapa
+    # tudo automaticamente (o < vira &lt;).
+    return render_template(
+        "tasks.html", tasks=rows, username=session["username"], search=search
+    )
 
 
 @app.route("/tasks/new", methods=["GET", "POST"])
@@ -204,33 +176,14 @@ def new_task():
         db.commit()
         return redirect(url_for("tasks"))
 
-    return """
-    <h1>Nova tarefa</h1>
-    <form method="post">
-        Titulo: <input type="text" name="title"><br>
-        Descricao: <textarea name="description"></textarea><br>
-        <input type="submit" value="Salvar">
-    </form>
-    """
-
-
-# Vulnerabilidade #4: endpoint de debug/diagnostico exposto sem
-# autenticacao, vazando informacoes internas do servidor.
-@app.route("/debug/info")
-def debug_info():
-    import platform
-    import sys
-
-    return {
-        "python_version": sys.version,
-        "platform": platform.platform(),
-        "secret_key": app.config["SECRET_KEY"],
-    }
+    return render_template("new_task.html")
 
 
 if __name__ == "__main__":
     with app.app_context():
         init_db()
-    # Vulnerabilidade #5: debug=True em producao expoe o Werkzeug debugger
-    # interativo (execucao remota de codigo) - tambem sera sinalizado pelo SAST.
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # CORRECAO #4 e #5: o endpoint /debug/info (que devolvia a chave de sessao)
+    # foi removido, e o debug deixou de ficar ligado: o debugger do Werkzeug
+    # permite executar codigo no servidor. Escuta so em 127.0.0.1, e o debug
+    # so liga com TASKFLOW_DEBUG=1.
+    app.run(host="127.0.0.1", port=5000, debug=os.environ.get("TASKFLOW_DEBUG") == "1")
