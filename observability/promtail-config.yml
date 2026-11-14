@@ -1,0 +1,36 @@
+# Promtail: le os arquivos de log da TaskFlow e envia cada linha ao Loki.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+# Onde o Promtail guarda ate onde ja leu (para nao reenviar tudo ao reiniciar).
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: taskflow
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          # E por este rotulo que as consultas selecionam os logs: {job="taskflow"}
+          job: taskflow
+          app: taskflow
+          # Caminho DENTRO do container (ver o volume em docker-compose.yml).
+          __path__: /var/log/taskflow/*.log
+
+    # Cada linha ja e um JSON. "level" e "event" viram rotulos, o que deixa os
+    # filtros comuns (so WARNING, so login_attempt) mais rapidos. Os demais
+    # campos (ip, result, request_id...) ficam no JSON e saem com "| json".
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            event: event
+      - labels:
+          level:
+          event:

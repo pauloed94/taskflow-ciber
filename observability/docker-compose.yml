@@ -1,0 +1,60 @@
+# Stack de observabilidade da TaskFlow: Loki (guarda os logs), Promtail (le o
+# arquivo de log da aplicacao e envia ao Loki) e Grafana (consulta e visualiza).
+#
+# A aplicacao roda FORA do Docker, na sua maquina (python app/app.py), e grava
+# logs/taskflow.log na raiz do repositorio; o Promtail le essa pasta (somente leitura).
+#
+# Como usar (a partir desta pasta):
+#   1. cp .env.example .env   e preencha GRAFANA_ADMIN_PASSWORD (o .env nunca vai para o Git)
+#   2. docker compose up -d
+#   3. Grafana em http://127.0.0.1:3000  (usuario: admin, senha: a do .env)
+
+name: taskflow-obs
+
+services:
+  loki:
+    image: grafana/loki:2.9.6
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      # So o proprio computador acessa; nada fica exposto na rede.
+      - "127.0.0.1:3100:3100"
+    networks:
+      - observabilidade
+    security_opt:
+      - no-new-privileges:true
+
+  promtail:
+    image: grafana/promtail:2.9.6
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ../logs:/var/log/taskflow:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    depends_on:
+      - loki
+    networks:
+      - observabilidade
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      # Sem senha no arquivo: o valor vem do .env (que nao e versionado).
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?defina GRAFANA_ADMIN_PASSWORD no arquivo .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      # O Loki ja entra como fonte de dados, sem configurar na interface.
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - loki
+    networks:
+      - observabilidade
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  observabilidade:
