@@ -1,0 +1,60 @@
+name: DAST
+run-name: "DAST · ${{ github.event.action == 'opened' && 'PR aberto' || github.event.action == 'synchronize' && 'commit novo no PR' || github.event_name }} · ${{ github.head_ref || github.ref_name }}"
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Construir a imagem
+        run: docker build -t taskflow:dast .
+
+      # A chave e as senhas de demonstração são geradas a cada execução e
+      # nunca ficam escritas no repositório nem nos logs.
+      - name: Subir a aplicação
+        run: |
+          docker run -d --name taskflow-dast -p 5000:5000 \
+            -e TASKFLOW_SECRET_KEY="$(openssl rand -hex 32)" \
+            -e TASKFLOW_ADMIN_PASSWORD="$(openssl rand -hex 16)" \
+            -e TASKFLOW_USER_PASSWORD="$(openssl rand -hex 16)" \
+            taskflow:dast
+
+      - name: Esperar a aplicação responder
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://localhost:5000/login; then
+              echo "A aplicação respondeu após ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "A aplicação não respondeu em 30s"
+          docker logs taskflow-dast
+          exit 1
+
+      - name: ZAP Baseline
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: http://localhost:5000
+          rules_file_name: .zap/rules.tsv
+          fail_action: true
+          allow_issue_writing: false
+
+      - name: Log da aplicação
+        if: always()
+        run: docker logs taskflow-dast
+
+      - name: Limpar
+        if: always()
+        run: docker rm -f taskflow-dast

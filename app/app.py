@@ -91,6 +91,31 @@ def init_db():
         db.commit()
 
 
+# Cria as tabelas e os usuarios de demonstracao ao carregar o modulo. Sob o
+# gunicorn o bloco  if __name__ == "__main__"  nunca roda, e o login falhava
+# (erro 500) por falta do banco.
+with app.app_context():
+    init_db()
+
+
+# Cabecalhos de seguranca em toda resposta (os que o ZAP cobrava): o navegador
+# nao "adivinha" o tipo do arquivo (nosniff), a pagina nao pode ser embutida em
+# outro site (X-Frame-Options e CSP frame-ancestors) e scripts de fora nao rodam (CSP).
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; frame-ancestors 'none'; form-action 'self'"
+    )
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.route("/")
 def index():
     if "user_id" not in session:
@@ -180,8 +205,7 @@ def new_task():
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        init_db()
+    # Execucao local; no container quem serve a aplicacao e o gunicorn.
     # CORRECAO #4 e #5: o endpoint /debug/info (que devolvia a chave de sessao)
     # foi removido, e o debug deixou de ficar ligado: o debugger do Werkzeug
     # permite executar codigo no servidor. Escuta so em 127.0.0.1, e o debug
