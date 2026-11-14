@@ -91,6 +91,13 @@ def init_db():
         db.commit()
 
 
+# Cria as tabelas e os usuarios de demonstracao ao carregar o modulo. Sob o
+# gunicorn o bloco  if __name__ == "__main__"  nunca roda, e o login falhava
+# (erro 500) por falta do banco.
+with app.app_context():
+    init_db()
+
+
 @app.route("/")
 def index():
     if "user_id" not in session:
@@ -180,8 +187,7 @@ def new_task():
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        init_db()
+    # Execucao local; no container quem serve a aplicacao e o gunicorn.
     # CORRECAO #4 e #5: o endpoint /debug/info (que devolvia a chave de sessao)
     # foi removido, e o debug deixou de ficar ligado: o debugger do Werkzeug
     # permite executar codigo no servidor. Escuta so em 127.0.0.1, e o debug
