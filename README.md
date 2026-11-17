@@ -17,7 +17,7 @@ Esteira segura de GitHub Actions para a aplicação **TaskFlow**, um app Flask q
 | **Instituição** | Cesar School |
 | **Disciplina** | DevSecOps (graduação em Segurança da Informação) |
 | **Professores** | Cris Apolinário e Diego Buarque |
-| **Integrantes** | Paulo Eduardo<br>André Coelho<br>João Victor Garmatz<br>Pedro Araújo<br>Pedro Leite |
+| **Integrantes** | Paulo Eduardo<br>André Coelho<br>João Victor Garmatz<br>Pedro Araújo<br>Pedro Leite<br>Gabriel Peixoto e Silva Ferreira |
 
 ## Sumário
 
